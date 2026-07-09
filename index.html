@@ -659,6 +659,20 @@
         selectedIdx = Math.min(selectedIdx, filtered.length - 1);
       }
     }
+    function keepSelectedItemVisibleInList() {
+      const list = codeListUl();
+      const selectedEl = list.querySelector('.code-item.selected');
+      if (!selectedEl) return;
+      const itemTop = selectedEl.offsetTop;
+      const itemBottom = itemTop + selectedEl.offsetHeight;
+      const viewTop = list.scrollTop;
+      const viewBottom = viewTop + list.clientHeight;
+      if (itemTop < viewTop) {
+        list.scrollTop = itemTop;
+      } else if (itemBottom > viewBottom) {
+        list.scrollTop = itemBottom - list.clientHeight;
+      }
+    }
 
     function goToNextUncompleted(completedCode) {
       const fullIdx = codes.indexOf(completedCode);
@@ -718,10 +732,7 @@
           renderAll();
         }
       });
-      const selectedEl = codeListUl().querySelector('.code-item.selected');
-      if (selectedEl) {
-        selectedEl.scrollIntoView({ block: 'nearest' });
-      }
+      keepSelectedItemVisibleInList();
       summaryDiv().innerHTML = 
         `<span>Available codes: <b>${codes.filter(c=>!status[c]?.completed).length}</b> / <b>${codes.length}</b></span>`;
       summaryDiv().style.display = showSummary ? 'block' : 'none';
