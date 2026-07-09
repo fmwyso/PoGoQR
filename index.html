@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PoGo Store QR Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, Arial, sans-serif;
+      background: #f8fbff;
+      color: #263238;
+      min-height: 100vh;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      padding: 0 8px 20px 8px;
+      max-width: 900px;
+      margin: auto;
+      min-height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.8em;
+      margin: 24px 0 10px 0;
+    }
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .qr-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 4px;
+    }
+    #current-code-label {
+      margin-top: 10px;
+      font-weight: 600;
+      font-size: 1.15em;
+      color: #3764a0;
+      text-align: center;
+    }
+    .list-panel {
+      width: 100%;
+    }
+    .code-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 330px;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 7px;
+      border: 1px solid #ddd;
+      box-shadow: 0 1px 6px rgba(34,34,64,0.06);
+    }
+    .code-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      transition: background 0.15s;
+      gap: 6px;
+      font-size: 1.08em;
+    }
+    .code-item:last-child {
+      border-bottom: none;
+    }
+    .code-item.selected {
+      background: #e3f2fd;
+      font-weight: bold;
+    }
+    .code-item.completed {
+      color: #97a3af;
+      text-decoration: line-through;
+    }
+    .code-item .timestamp {
+      margin-left: auto;
+      font-size: 0.97em;
+      color: #8c9caf;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin: 0;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+    }
+    .controls button {
+      background: #2979ff;
+      border: none;
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.14s;
+    }
+    .controls .icon-btn {
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      font-size: 1.45em;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .controls .complete-btn {
+      background: #e53935;
+      font-size: 1.25em;
+      font-weight: bold;
+    }
+    .controls .complete-btn:disabled {
+      background: #e0b4b4;
+    }
+    .controls .complete-btn:disabled,
+    .controls .undo-btn:disabled {
+      cursor: not-allowed;
+    }
+    .controls .undo-btn {
+      background: #43a047;
+      font-size: 1.35em;
+      font-weight: bold;
+    }
+    .controls .undo-btn:disabled {
+      background: #b8d4b9;
+    }
+    .controls .icon-btn:disabled:not(.complete-btn):not(.undo-btn) {
+      background: #b3c6e1;
+      color: #f4f4f4;
+      cursor: not-allowed;
+    }
+    .bottom-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+      width: 100%;
+    }
+    .bottom-actions button {
+      width: 100%;
+      background: #2979ff;
+      border: none;
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 6px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.14s;
+      box-sizing: border-box;
+    }
+    #toggle-show-completed-btn {
+      background: #5c6bc0;
+    }
+    #clear-btn {
+      background: #e53935;
+    }
+    .summary {
+      margin-top: 4px;
+      margin-bottom: 2px;
+      text-align: center;
+      font-size: 1.08em;
+      color: #3b4c67;
+      font-weight: 500;
+    }
+    /* QR Styling */
+    #qrcode {
+      margin: 0;
+    }
+    .empty-list {
+      font-size: 1.1em;
+      color: #7b8b97;
+      padding: 26px 0;
+      text-align: center;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .modal.open {
+      display: flex;
+    }
+    .modal-box {
+      background: #fff;
+      border-radius: 10px;
+      padding: 22px 24px;
+      max-width: 340px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+      text-align: center;
+    }
+    .modal-box p {
+      margin: 0 0 18px 0;
+      font-size: 1.05em;
+      line-height: 1.45;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    .modal-actions button {
+      border: none;
+      border-radius: 6px;
+      padding: 10px 28px;
+      font-size: 1em;
+      cursor: pointer;
+      color: #fff;
+    }
+    #clear-yes-btn {
+      background: #e53935;
+    }
+    #clear-no-btn {
+      background: #757575;
+    }
+    .paste-modal-box {
+      text-align: left;
+    }
+    .paste-hint {
+      margin: -8px 0 12px 0 !important;
+      font-size: 0.92em !important;
+      color: #6b7c8f;
+    }
+    #paste-input, #export-output {
+      width: 100%;
+      min-height: 100px;
+      font-size: 1em;
+      border-radius: 6px;
+      border: 1px solid #bdbdbd;
+      padding: 10px;
+      box-sizing: border-box;
+      resize: vertical;
+      font-family: inherit;
+    }
+    #paste-cancel-btn, #export-close-btn {
+      background: #757575;
+    }
+    #paste-submit-btn {
+      background: #43a047;
+    }
+    /* Ensure controls are touch-friendly */
+    button, label, input, textarea { touch-action: manipulation; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PoGo Store QR Generator</h1>
+    <div class="main-content">
+      <div class="qr-panel">
+        <div id="qrcode"></div>
+        <div id="current-code-label"></div>
+      </div>
+      <div class="controls">
+        <button id="prev-btn" type="button" class="icon-btn" title="Previous" aria-label="Previous">↑</button>
+        <button id="next-btn" type="button" class="icon-btn" title="Next" aria-label="Next">↓</button>
+        <button id="undo-completed-btn" type="button" class="icon-btn undo-btn" title="Undo completed" aria-label="Undo completed">✓</button>
+        <button id="mark-completed-btn" type="button" class="icon-btn complete-btn" title="Mark as completed" aria-label="Mark as completed">✕</button>
+      </div>
+      <div class="list-panel">
+        <ul class="code-list" id="code-list">
+          <!-- Code items populated by JS -->
+        </ul>
+        <div class="summary" id="code-summary"></div>
+        <div class="bottom-actions">
+          <button id="add-codes-btn" type="button">Add New Codes</button>
+          <button id="export-btn" type="button">Export Codes (w/ Timestamps)</button>
+          <button id="toggle-show-completed-btn" type="button">Show Completed</button>
+          <button id="clear-btn" type="button">Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="clear-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="clear-modal-title">
+    <div class="modal-box">
+      <p id="clear-modal-title">Clear all codes? This will remove every code and completion record.</p>
+      <div class="modal-actions">
+        <button id="clear-yes-btn" type="button">Yes</button>
+        <button id="clear-no-btn" type="button">No</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="paste-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="paste-modal-title">
+    <div class="modal-box paste-modal-box">
+      <p id="paste-modal-title">Add codes (one per line)</p>
+      <p class="paste-hint">Paste or type codes below, then tap <strong>Submit</strong>.</p>
+      <textarea id="paste-input" rows="5" placeholder="Paste or type codes here…" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <button id="paste-submit-btn" type="button">Submit</button>
+        <button id="paste-cancel-btn" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="export-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+    <div class="modal-box paste-modal-box">
+      <p id="export-modal-title">Export codes with timestamps</p>
+      <p class="paste-hint">Select all and copy (or use <strong>Copy</strong> from the menu).</p>
+      <textarea id="export-output" rows="8" readonly autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <button id="export-close-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QRCode.js (MIT, https://github.com/davidshimjs/qrcodejs) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    // Helpers for Cookie Storage
+    const CODE_LIST_COOKIE = "pg_codes_v1";
+    const CODE_STATUS_COOKIE = "pg_codes_status_v1";
+    const SHOW_COMPLETED_COOKIE = "pg_show_completed_v1";
+    function setCookie(name, value, days) {
+      const d = new Date();
+      d.setTime(d.getTime() + (days*24*60*60*1000));
+      document.cookie = name + "=" + encodeURIComponent(value) + ";expires=" + d.toUTCString() + ";path=/";
+    }
+    function getCookie(name) {
+      const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+      return v ? decodeURIComponent(v.pop()) : null;
+    }
+
+    function parseCodeLine(line) {
+      const trimmed = line.trim();
+      if (!trimmed) return null;
+
+      const withTimestamp = trimmed.match(/^([A-Za-z0-9]+)\s+\((.+)\)\s*$/);
+      if (withTimestamp) {
+        return {
+          code: withTimestamp[1],
+          completed: true,
+          timestamp: withTimestamp[2].trim(),
+        };
+      }
+
+      const codeOnly = trimmed.match(/^([A-Za-z0-9]+)$/);
+      if (codeOnly) {
+        return { code: codeOnly[1], completed: false, timestamp: null };
+      }
+
+      const loose = trimmed.match(/^([A-Za-z0-9]+)/);
+      if (loose) {
+        return { code: loose[1], completed: false, timestamp: null };
+      }
+      return null;
+    }
+
+    function parseCodeEntries(text) {
+      return text.split('\n').map(parseCodeLine).filter(entry => entry !== null);
+    }
+
+    function addNewCodes() {
+      openPasteModal();
+    }
+
+    function addCodesFromText(text) {
+      const entries = parseCodeEntries(text);
+      if (!entries.length) {
+        alert('No valid codes found. Use one alphanumeric code per line.');
+        return false;
+      }
+      const prevLen = codes.length;
+      entries.forEach(({ code, completed, timestamp }) => {
+        if (!codes.includes(code)) codes.push(code);
+        if (completed && timestamp) {
+          status[code] = { completed: true, timestamp };
+        } else if (!status[code]?.completed) {
+          status[code] = { completed: false, timestamp: null };
+        }
+      });
+      fixCodeStatus();
+      saveToStorage();
+      if (prevLen === 0) selectedIdx = 0;
+      renderAll();
+      return true;
+    }
+
+    function openPasteModal() {
+      const input = pasteInput();
+      input.value = '';
+      pasteModal().classList.add('open');
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closePasteModal() {
+      pasteModal().classList.remove('open');
+      pasteInput().value = '';
+    }
+
+    function submitPasteInput() {
+      if (addCodesFromText(pasteInput().value)) closePasteModal();
+    }
+
+
+    function maskCode(code) {
+      if (code.length <= 4) return code;
+      return '*'.repeat(code.length - 4) + code.slice(-4);
+    }
+
+    function nowNiceStr() {
+      const d = new Date();
+      return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute:'2-digit' });
+    }
+
+    // State
+    let codes = [];    // Array of codes: [string]
+    let status = {};   // code -> { completed: bool, timestamp: string|null }
+    let selectedIdx = 0;
+    let showCompleted = false;
+
+    // Load From Cookies
+    function loadFromStorage() {
+      const storedCodes = getCookie(CODE_LIST_COOKIE);
+      const storedStatus = getCookie(CODE_STATUS_COOKIE);
+      const storedShowCompleted = getCookie(SHOW_COMPLETED_COOKIE);
+      codes = storedCodes ? JSON.parse(storedCodes) : [];
+      status = storedStatus ? JSON.parse(storedStatus) : {};
+      if (storedShowCompleted !== null) {
+        showCompleted = storedShowCompleted === '1';
+      }
+      fixCodeStatus();
+    }
+    function saveToStorage() {
+      setCookie(CODE_LIST_COOKIE, JSON.stringify(codes), 90);
+      setCookie(CODE_STATUS_COOKIE, JSON.stringify(status), 90);
+    }
+    function fixCodeStatus() {
+      // Remove unknown codes, add empty ones
+      let s = {};
+      codes.forEach(code => {
+        if (status[code]) s[code] = status[code];
+        else s[code] = {completed:false, timestamp:null};
+      });
+      status = s;
+    }
+
+    // DOM Refs
+    const addCodesBtn = () => document.getElementById('add-codes-btn');
+    const clearBtn = () => document.getElementById('clear-btn');
+    const clearModal = () => document.getElementById('clear-modal');
+    const clearYesBtn = () => document.getElementById('clear-yes-btn');
+    const clearNoBtn = () => document.getElementById('clear-no-btn');
+    const pasteModal = () => document.getElementById('paste-modal');
+    const pasteInput = () => document.getElementById('paste-input');
+    const pasteSubmitBtn = () => document.getElementById('paste-submit-btn');
+    const pasteCancelBtn = () => document.getElementById('paste-cancel-btn');
+    const exportModal = () => document.getElementById('export-modal');
+    const exportOutput = () => document.getElementById('export-output');
+    const exportCloseBtn = () => document.getElementById('export-close-btn');
+    const exportBtn = () => document.getElementById('export-btn');
+    const showCompletedBtn = () => document.getElementById('toggle-show-completed-btn');
+    const codeListUl = () => document.getElementById('code-list');
+    const summaryDiv = () => document.getElementById('code-summary');
+    const prevBtn = () => document.getElementById('prev-btn');
+    const nextBtn = () => document.getElementById('next-btn');
+    const markCompletedBtn = () => document.getElementById('mark-completed-btn');
+    const undoCompletedBtn = () => document.getElementById('undo-completed-btn');
+    const qrDiv = () => document.getElementById('qrcode');
+    const currentCodeLabel = () => document.getElementById('current-code-label');
+
+    function getFilteredCodes() {
+      return showCompleted ? codes : codes.filter(code => !status[code]?.completed);
+    }
+
+    function goToNextUncompleted(completedCode) {
+      const fullIdx = codes.indexOf(completedCode);
+      let nextCode = null;
+      for (let i = fullIdx + 1; i < codes.length; i++) {
+        if (!status[codes[i]]?.completed) {
+          nextCode = codes[i];
+          break;
+        }
+      }
+      if (!nextCode) {
+        for (let i = 0; i < fullIdx; i++) {
+          if (!status[codes[i]]?.completed) {
+            nextCode = codes[i];
+            break;
+          }
+        }
+      }
+      const filtered = getFilteredCodes();
+      if (!filtered.length) {
+        selectedIdx = 0;
+        return;
+      }
+      if (nextCode) {
+        const idx = filtered.indexOf(nextCode);
+        selectedIdx = idx >= 0 ? idx : 0;
+      } else {
+        selectedIdx = Math.min(selectedIdx, filtered.length - 1);
+      }
+    }
+
+    function renderCodeList() {
+      const filteredCodes = getFilteredCodes();
+      // Clamp selectedIdx to filtered.
+      if (!filteredCodes.length) selectedIdx = 0;
+      else if (selectedIdx < 0) selectedIdx = 0;
+      else if (selectedIdx >= filteredCodes.length) selectedIdx = filteredCodes.length-1;
+
+      let html = '';
+      if (!filteredCodes.length) {
+        html = '<li class="empty-list">No codes available</li>';
+      }
+      filteredCodes.forEach((code, i) => {
+        const st = status[code]||{};
+        html += `<li class="code-item${i===selectedIdx?' selected':''}${st.completed?' completed':''}" data-listidx="${i}" title="${st.completed ? 'Completed on: ' + st.timestamp : ''}">
+          <span>${maskCode(code)}</span>
+          ${st.completed && st.timestamp ? `<span class="timestamp">(${st.timestamp})</span>` : ''}
+        </li>`;
+      });
+      codeListUl().innerHTML = html;
+      // Select on click
+      Array.from(codeListUl().querySelectorAll('.code-item')).forEach(li=>{
+        li.onclick = function(){
+          selectedIdx = Number(this.dataset.listidx);
+          renderAll();
+        }
+      });
+      summaryDiv().innerHTML = 
+        `<span>Available codes: <b>${codes.filter(c=>!status[c]?.completed).length}</b> / <b>${codes.length}</b></span>`;
+    }
+
+    function showQRAndCurrent() {
+      const filteredCodes = getFilteredCodes();
+      let code = filteredCodes[selectedIdx] || '';
+      qrDiv().innerHTML = '';
+      if (code) {
+        new QRCode(qrDiv(), {
+          text: `https://store.pokemongo.com/offer-redemption?passcode=${encodeURIComponent(code)}`,
+          width: Math.min(window.innerWidth * 0.9, 270),
+          height: Math.min(window.innerWidth * 0.9, 270),
+          colorDark: "#0c2133",
+          colorLight: "#fafbfc",
+          margin: 2,
+        });
+        currentCodeLabel().innerText = code;
+      } else {
+        currentCodeLabel().innerText = "";
+      }
+    }
+
+    function updateShowCompletedBtn() {
+      showCompletedBtn().textContent = showCompleted ? 'Hide Completed' : 'Show Completed';
+    }
+
+    function toggleShowCompleted() {
+      showCompleted = !showCompleted;
+      setCookie(SHOW_COMPLETED_COOKIE, showCompleted ? '1' : '0', 90);
+      selectedIdx = 0;
+      renderAll();
+    }
+
+    function buildExportText() {
+      return codes.map(code => {
+        const s = status[code];
+        if (s?.completed && s.timestamp) {
+          return `${code} (${s.timestamp})`;
+        }
+        return code;
+      }).join('\n');
+    }
+
+    function openExportModal() {
+      const output = exportOutput();
+      output.value = buildExportText();
+      exportModal().classList.add('open');
+      setTimeout(() => {
+        output.focus();
+        output.select();
+      }, 50);
+    }
+
+    function closeExportModal() {
+      exportModal().classList.remove('open');
+      exportOutput().value = '';
+    }
+
+    function renderAll() {
+      renderCodeList();
+      showQRAndCurrent();
+      updateNavBtnStates();
+      updateShowCompletedBtn();
+    }
+
+    function updateNavBtnStates() {
+      const filteredCodes = getFilteredCodes();
+      const currentCode = filteredCodes[selectedIdx];
+      const isCompleted = !!status[currentCode]?.completed;
+      prevBtn().disabled = selectedIdx <= 0 || !filteredCodes.length;
+      nextBtn().disabled = selectedIdx+1 >= filteredCodes.length || !filteredCodes.length;
+      markCompletedBtn().disabled = !filteredCodes.length || isCompleted;
+      undoCompletedBtn().disabled = !filteredCodes.length || !isCompleted;
+    }
+
+    function goPrev() {
+      if (selectedIdx > 0) { selectedIdx--; renderAll(); }
+    }
+    function goNext() {
+      const filteredCodes = getFilteredCodes();
+      if (selectedIdx+1 < filteredCodes.length) { selectedIdx++; renderAll(); }
+    }
+    function markCompletedAndNext() {
+      const filteredCodes = getFilteredCodes();
+      if (!filteredCodes.length) return;
+      const code = filteredCodes[selectedIdx];
+      if (!code || status[code]?.completed) return;
+      status[code] = {completed:true, timestamp: nowNiceStr()};
+      saveToStorage();
+      goToNextUncompleted(code);
+      renderAll();
+    }
+
+    function undoCompleted() {
+      const filteredCodes = getFilteredCodes();
+      if (!filteredCodes.length) return;
+      const code = filteredCodes[selectedIdx];
+      if (!code || !status[code]?.completed) return;
+      status[code] = {completed: false, timestamp: null};
+      saveToStorage();
+      renderAll();
+    }
+
+    function openClearModal() {
+      clearModal().classList.add('open');
+    }
+
+    function closeClearModal() {
+      clearModal().classList.remove('open');
+    }
+
+    function clearAllCodes() {
+      codes = [];
+      status = {};
+      selectedIdx = 0;
+      saveToStorage();
+      closeClearModal();
+      renderAll();
+    }
+
+    function addEventListeners() {
+      addCodesBtn().onclick = addNewCodes;
+      pasteSubmitBtn().onclick = submitPasteInput;
+      pasteCancelBtn().onclick = closePasteModal;
+      pasteModal().onclick = (e) => { if (e.target === pasteModal()) closePasteModal(); };
+      exportBtn().onclick = openExportModal;
+      exportCloseBtn().onclick = closeExportModal;
+      exportModal().onclick = (e) => { if (e.target === exportModal()) closeExportModal(); };
+      showCompletedBtn().onclick = toggleShowCompleted;
+      clearBtn().onclick = openClearModal;
+      clearYesBtn().onclick = clearAllCodes;
+      clearNoBtn().onclick = closeClearModal;
+      clearModal().onclick = (e) => { if (e.target === clearModal()) closeClearModal(); };
+      prevBtn().onclick = goPrev;
+      nextBtn().onclick = goNext;
+      undoCompletedBtn().onclick = undoCompleted;
+      markCompletedBtn().onclick = markCompletedAndNext;
+      window.addEventListener('resize', () => showQRAndCurrent());
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (exportModal().classList.contains('open')) { closeExportModal(); return; }
+          if (pasteModal().classList.contains('open')) { closePasteModal(); return; }
+          if (clearModal().classList.contains('open')) { closeClearModal(); return; }
+        }
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (e.key === 'ArrowUp') goPrev();
+        else if (e.key === 'ArrowDown') goNext();
+        else if ((e.key === 'x' || e.key === 'X') && !markCompletedBtn().disabled) markCompletedAndNext();
+      });
+    }
+
+    // On Load, pull cookie data
+    window.addEventListener('DOMContentLoaded', function() {
+      loadFromStorage();
+      renderAll();
+      addEventListeners();
+    });
+  </script>
+</body>
+</html>
