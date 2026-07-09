@@ -238,6 +238,7 @@
       font-size: 1.08em;
       color: #3b4c67;
       font-weight: 500;
+      min-height: 1.35em;
     }
     /* QR Styling */
     #qrcode {
@@ -734,8 +735,8 @@
       });
       keepSelectedItemVisibleInList();
       summaryDiv().innerHTML = 
-        `<span>Available codes: <b>${codes.filter(c=>!status[c]?.completed).length}</b> / <b>${codes.length}</b></span>`;
-      summaryDiv().style.display = showSummary ? 'block' : 'none';
+        `<span>Available Codes: <b>${codes.filter(c=>!status[c]?.completed).length}</b> / <b>${codes.length}</b></span>`;
+      summaryDiv().style.visibility = showSummary ? 'visible' : 'hidden';
     }
 
     function showQRAndCurrent() {
