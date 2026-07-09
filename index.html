@@ -319,7 +319,7 @@
       font-size: 0.92em !important;
       color: #6b7c8f;
     }
-    #paste-input, #export-output {
+    #paste-input, #export-output, #duplicate-output {
       width: 100%;
       min-height: 100px;
       font-size: 1em;
@@ -330,7 +330,7 @@
       resize: vertical;
       font-family: inherit;
     }
-    #paste-cancel-btn, #export-close-btn {
+    #paste-cancel-btn, #export-close-btn, #duplicate-close-btn {
       background: #757575;
     }
     #paste-submit-btn {
@@ -433,6 +433,17 @@
     </div>
   </div>
 
+  <div id="duplicate-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="duplicate-modal-title">
+    <div class="modal-box paste-modal-box">
+      <p id="duplicate-modal-title">Duplicate codes detected</p>
+      <p class="paste-hint" id="duplicate-modal-summary"></p>
+      <textarea id="duplicate-output" rows="8" readonly autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <button id="duplicate-close-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- QRCode.js (MIT, https://github.com/davidshimjs/qrcodejs) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
@@ -487,12 +498,67 @@
       openPasteModal();
     }
 
+    function analyzeDuplicates(entries) {
+      const preExisting = new Set(codes);
+      const batchCounts = {};
+      entries.forEach(e => {
+        batchCounts[e.code] = (batchCounts[e.code] || 0) + 1;
+      });
+
+      const addedInBatch = new Set();
+      const dupInfo = {};
+      let totalDuplicateEntries = 0;
+
+      entries.forEach(({ code }) => {
+        const inList = preExisting.has(code);
+        const alreadyAddedThisBatch = addedInBatch.has(code);
+        if (inList || alreadyAddedThisBatch) {
+          totalDuplicateEntries++;
+          if (!dupInfo[code]) {
+            dupInfo[code] = { skipped: 0, inList, inputCount: batchCounts[code] };
+          }
+          dupInfo[code].skipped++;
+        } else {
+          addedInBatch.add(code);
+        }
+      });
+
+      return { totalDuplicateEntries, dupInfo };
+    }
+
+    function buildDuplicateReport(dupInfo, totalDuplicateEntries) {
+      const uniqueCodes = Object.keys(dupInfo).sort();
+      const lines = uniqueCodes.map(code => {
+        const info = dupInfo[code];
+        const parts = [];
+        if (info.inList) parts.push('already in list');
+        if (info.inputCount > 1) parts.push(`${info.inputCount} times in input`);
+        const detail = parts.length ? ` (${parts.join(', ')})` : '';
+        return `${code}${detail}`;
+      });
+      return lines.join('\n');
+    }
+
+    function openDuplicateModal(dupInfo, totalDuplicateEntries) {
+      const uniqueCount = Object.keys(dupInfo).length;
+      document.getElementById('duplicate-modal-summary').textContent =
+        `${totalDuplicateEntries} duplicate ${totalDuplicateEntries === 1 ? 'entry' : 'entries'} across ${uniqueCount} unique ${uniqueCount === 1 ? 'code' : 'codes'}.`;
+      duplicateOutput().value = buildDuplicateReport(dupInfo, totalDuplicateEntries);
+      duplicateModal().classList.add('open');
+    }
+
+    function closeDuplicateModal() {
+      duplicateModal().classList.remove('open');
+      duplicateOutput().value = '';
+    }
+
     function addCodesFromText(text) {
       const entries = parseCodeEntries(text);
       if (!entries.length) {
         alert('No valid codes found. Use one alphanumeric code per line.');
         return false;
       }
+      const { totalDuplicateEntries, dupInfo } = analyzeDuplicates(entries);
       const prevLen = codes.length;
       entries.forEach(({ code, completed, timestamp }) => {
         if (!codes.includes(code)) {
@@ -509,6 +575,9 @@
       saveToStorage();
       if (prevLen === 0) selectedIdx = 0;
       renderAll();
+      if (totalDuplicateEntries > 0) {
+        openDuplicateModal(dupInfo, totalDuplicateEntries);
+      }
       return true;
     }
 
@@ -624,6 +693,9 @@
     const exportModal = () => document.getElementById('export-modal');
     const exportOutput = () => document.getElementById('export-output');
     const exportCloseBtn = () => document.getElementById('export-close-btn');
+    const duplicateModal = () => document.getElementById('duplicate-modal');
+    const duplicateOutput = () => document.getElementById('duplicate-output');
+    const duplicateCloseBtn = () => document.getElementById('duplicate-close-btn');
     const exportBtn = () => document.getElementById('export-btn');
     const showCompletedWrap = () => document.getElementById('show-completed-switch-wrap');
     const showValuesWrap = () => document.getElementById('show-values-switch-wrap');
@@ -912,6 +984,8 @@
       exportBtn().onclick = openExportModal;
       exportCloseBtn().onclick = closeExportModal;
       exportModal().onclick = (e) => { if (e.target === exportModal()) closeExportModal(); };
+      duplicateCloseBtn().onclick = closeDuplicateModal;
+      duplicateModal().onclick = (e) => { if (e.target === duplicateModal()) closeDuplicateModal(); };
       showCompletedWrap().onclick = toggleShowCompleted;
       showValuesWrap().onclick = toggleShowCodeValues;
       showSummaryWrap().onclick = toggleShowSummary;
@@ -926,6 +1000,7 @@
       window.addEventListener('resize', () => showQRAndCurrent());
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
+          if (duplicateModal().classList.contains('open')) { closeDuplicateModal(); return; }
           if (exportModal().classList.contains('open')) { closeExportModal(); return; }
           if (pasteModal().classList.contains('open')) { closePasteModal(); return; }
           if (clearModal().classList.contains('open')) { closeClearModal(); return; }
