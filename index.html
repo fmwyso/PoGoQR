@@ -664,15 +664,19 @@
       const list = codeListUl();
       const selectedEl = list.querySelector('.code-item.selected');
       if (!selectedEl) return;
-      const itemTop = selectedEl.offsetTop;
-      const itemBottom = itemTop + selectedEl.offsetHeight;
-      const viewTop = list.scrollTop;
-      const viewBottom = viewTop + list.clientHeight;
-      if (itemTop < viewTop) {
-        list.scrollTop = itemTop;
-      } else if (itemBottom > viewBottom) {
-        list.scrollTop = itemBottom - list.clientHeight;
+
+      const listRect = list.getBoundingClientRect();
+      const itemRect = selectedEl.getBoundingClientRect();
+
+      if (itemRect.top < listRect.top) {
+        list.scrollTop += itemRect.top - listRect.top;
+      } else if (itemRect.bottom > listRect.bottom) {
+        list.scrollTop += itemRect.bottom - listRect.bottom;
       }
+    }
+
+    function scrollSelectedIntoListView() {
+      requestAnimationFrame(() => keepSelectedItemVisibleInList());
     }
 
     function goToNextUncompleted(completedCode) {
@@ -733,7 +737,7 @@
           renderAll();
         }
       });
-      keepSelectedItemVisibleInList();
+      scrollSelectedIntoListView();
       summaryDiv().innerHTML = 
         `<span>Available Codes: <b>${codes.filter(c=>!status[c]?.completed).length}</b> / <b>${codes.length}</b></span>`;
       summaryDiv().style.visibility = showSummary ? 'visible' : 'hidden';
