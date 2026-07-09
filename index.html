@@ -53,7 +53,7 @@
       list-style: none;
       padding: 0;
       margin: 0;
-      max-height: 330px;
+      max-height: 230px;
       overflow-y: auto;
       background: #fff;
       border-radius: 7px;
@@ -146,7 +146,77 @@
       margin-top: 12px;
       width: 100%;
     }
-    .bottom-actions button {
+    .section-label {
+      margin-top: 12px;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.78em;
+      font-weight: 700;
+      color: #6f7f94;
+    }
+    .option-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #fff;
+      border: 1px solid #dde5ef;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .option-label {
+      font-size: 0.95em;
+      font-weight: 600;
+      color: #43566f;
+    }
+    .switch-wrap {
+      display: inline-flex;
+      align-items: center;
+      user-select: none;
+    }
+    .switch-toggle {
+      width: 74px;
+      height: 38px;
+      border-radius: 999px;
+      border: 2px solid #e06666;
+      background: #e57373;
+      cursor: pointer;
+      padding: 0;
+      position: relative;
+      display: inline-block;
+      transition: border-color 0.18s, background 0.18s;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .switch-toggle::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #ef9a9a;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      transition: left 0.18s, background 0.18s;
+    }
+    .switch-wrap.on .switch-toggle {
+      border-color: #3f67b5;
+      background: #4f78cc;
+    }
+    .switch-wrap.on .switch-toggle::before {
+      left: calc(100% - 32px);
+      background: #8fb0ff;
+    }
+    .switch-wrap.off .switch-toggle {
+      border-color: #e06666;
+      background: #e57373;
+    }
+    .switch-wrap.off .switch-toggle::before {
+      background: #ef9a9a;
+    }
+    .bottom-actions > button {
       width: 100%;
       background: #2979ff;
       border: none;
@@ -157,9 +227,6 @@
       cursor: pointer;
       transition: background 0.14s;
       box-sizing: border-box;
-    }
-    #toggle-show-completed-btn {
-      background: #5c6bc0;
     }
     #clear-btn {
       background: #e53935;
@@ -175,6 +242,20 @@
     /* QR Styling */
     #qrcode {
       margin: 0;
+      width: min(90vw, 270px);
+      height: min(90vw, 270px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: #f3f7fc;
+    }
+    #qrcode canvas {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    #current-code-label {
+      min-height: 1.5em;
     }
     .empty-list {
       font-size: 1.1em;
@@ -254,6 +335,16 @@
     #paste-submit-btn {
       background: #43a047;
     }
+    .mobile-actions-spacer {
+      display: none;
+    }
+    @media (max-width: 900px) and (pointer: coarse) {
+      .mobile-actions-spacer {
+        display: block;
+        height: 34vh;
+        min-height: 180px;
+      }
+    }
     /* Ensure controls are touch-friendly */
     button, label, input, textarea { touch-action: manipulation; }
   </style>
@@ -277,11 +368,32 @@
           <!-- Code items populated by JS -->
         </ul>
         <div class="summary" id="code-summary"></div>
+        <div class="mobile-actions-spacer" aria-hidden="true"></div>
         <div class="bottom-actions">
           <button id="add-codes-btn" type="button">Add New Codes</button>
           <button id="export-btn" type="button">Export Codes (w/ Timestamps)</button>
-          <button id="toggle-show-completed-btn" type="button">Show Completed</button>
           <button id="clear-btn" type="button">Clear</button>
+        </div>
+        <div class="section-label">Options</div>
+        <div class="bottom-actions">
+          <div class="option-row">
+            <span class="option-label">Show Completed?</span>
+            <div id="show-completed-switch-wrap" class="switch-wrap off">
+              <button id="show-completed-toggle-btn" class="switch-toggle" type="button" aria-label="Toggle show completed"></button>
+            </div>
+          </div>
+          <div class="option-row">
+            <span class="option-label">Show Code Values?</span>
+            <div id="show-values-switch-wrap" class="switch-wrap on">
+              <button id="show-values-toggle-btn" class="switch-toggle" type="button" aria-label="Toggle show code values"></button>
+            </div>
+          </div>
+          <div class="option-row">
+            <span class="option-label">Show Available Count?</span>
+            <div id="show-summary-switch-wrap" class="switch-wrap on">
+              <button id="show-summary-toggle-btn" class="switch-toggle" type="button" aria-label="Toggle show available count"></button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -327,6 +439,10 @@
     const CODE_LIST_COOKIE = "pg_codes_v1";
     const CODE_STATUS_COOKIE = "pg_codes_status_v1";
     const SHOW_COMPLETED_COOKIE = "pg_show_completed_v1";
+    const SHOW_VALUES_COOKIE = "pg_show_values_v1";
+    const SHOW_SUMMARY_COOKIE = "pg_show_summary_v1";
+    const CODE_INDEX_COOKIE = "pg_code_index_v1";
+    const NEXT_INDEX_COOKIE = "pg_next_index_v1";
     function setCookie(name, value, days) {
       const d = new Date();
       d.setTime(d.getTime() + (days*24*60*60*1000));
@@ -378,7 +494,10 @@
       }
       const prevLen = codes.length;
       entries.forEach(({ code, completed, timestamp }) => {
-        if (!codes.includes(code)) codes.push(code);
+        if (!codes.includes(code)) {
+          codes.push(code);
+          codeIndex[code] = nextCodeIndex++;
+        }
         if (completed && timestamp) {
           status[code] = { completed: true, timestamp };
         } else if (!status[code]?.completed) {
@@ -409,9 +528,13 @@
     }
 
 
-    function maskCode(code) {
-      if (code.length <= 4) return code;
-      return '*'.repeat(code.length - 4) + code.slice(-4);
+    function displayCodeValue(code) {
+      if (showCodeValues) return code;
+      return '*'.repeat(Math.max(code.length, 4));
+    }
+    function getIndexPadWidth() {
+      const highest = Object.values(codeIndex).reduce((m, v) => Math.max(m, v), 0);
+      return Math.max(1, String(highest || 0).length);
     }
 
     function nowNiceStr() {
@@ -422,24 +545,47 @@
     // State
     let codes = [];    // Array of codes: [string]
     let status = {};   // code -> { completed: bool, timestamp: string|null }
+    let codeIndex = {}; // code -> persistent display index number
+    let nextCodeIndex = 1;
     let selectedIdx = 0;
     let showCompleted = false;
+    let showCodeValues = true;
+    let showSummary = true;
+    let qrCodeInstance = null;
+    let lastQrText = '';
 
     // Load From Cookies
     function loadFromStorage() {
       const storedCodes = getCookie(CODE_LIST_COOKIE);
       const storedStatus = getCookie(CODE_STATUS_COOKIE);
       const storedShowCompleted = getCookie(SHOW_COMPLETED_COOKIE);
+      const storedShowValues = getCookie(SHOW_VALUES_COOKIE);
+      const storedShowSummary = getCookie(SHOW_SUMMARY_COOKIE);
+      const storedCodeIndex = getCookie(CODE_INDEX_COOKIE);
+      const storedNextCodeIndex = getCookie(NEXT_INDEX_COOKIE);
       codes = storedCodes ? JSON.parse(storedCodes) : [];
       status = storedStatus ? JSON.parse(storedStatus) : {};
       if (storedShowCompleted !== null) {
         showCompleted = storedShowCompleted === '1';
       }
+      if (storedShowValues !== null) {
+        showCodeValues = storedShowValues === '1';
+      }
+      if (storedShowSummary !== null) {
+        showSummary = storedShowSummary === '1';
+      }
+      codeIndex = storedCodeIndex ? JSON.parse(storedCodeIndex) : {};
+      if (storedNextCodeIndex !== null) {
+        nextCodeIndex = Math.max(1, Number(storedNextCodeIndex) || 1);
+      }
       fixCodeStatus();
+      fixCodeIndex();
     }
     function saveToStorage() {
       setCookie(CODE_LIST_COOKIE, JSON.stringify(codes), 90);
       setCookie(CODE_STATUS_COOKIE, JSON.stringify(status), 90);
+      setCookie(CODE_INDEX_COOKIE, JSON.stringify(codeIndex), 90);
+      setCookie(NEXT_INDEX_COOKIE, String(nextCodeIndex), 90);
     }
     function fixCodeStatus() {
       // Remove unknown codes, add empty ones
@@ -449,6 +595,19 @@
         else s[code] = {completed:false, timestamp:null};
       });
       status = s;
+    }
+    function fixCodeIndex() {
+      const next = {};
+      codes.forEach(code => {
+        if (Number.isInteger(codeIndex[code]) && codeIndex[code] > 0) {
+          next[code] = codeIndex[code];
+        } else {
+          next[code] = nextCodeIndex++;
+        }
+      });
+      codeIndex = next;
+      const highest = Object.values(codeIndex).reduce((m, v) => Math.max(m, v), 0);
+      if (nextCodeIndex <= highest) nextCodeIndex = highest + 1;
     }
 
     // DOM Refs
@@ -465,7 +624,9 @@
     const exportOutput = () => document.getElementById('export-output');
     const exportCloseBtn = () => document.getElementById('export-close-btn');
     const exportBtn = () => document.getElementById('export-btn');
-    const showCompletedBtn = () => document.getElementById('toggle-show-completed-btn');
+    const showCompletedWrap = () => document.getElementById('show-completed-switch-wrap');
+    const showValuesWrap = () => document.getElementById('show-values-switch-wrap');
+    const showSummaryWrap = () => document.getElementById('show-summary-switch-wrap');
     const codeListUl = () => document.getElementById('code-list');
     const summaryDiv = () => document.getElementById('code-summary');
     const prevBtn = () => document.getElementById('prev-btn');
@@ -477,6 +638,26 @@
 
     function getFilteredCodes() {
       return showCompleted ? codes : codes.filter(code => !status[code]?.completed);
+    }
+    function getSelectedCode() {
+      return getFilteredCodes()[selectedIdx] || '';
+    }
+    function restoreSelectionByCode(code) {
+      const filtered = getFilteredCodes();
+      if (!filtered.length) {
+        selectedIdx = 0;
+        return;
+      }
+      if (!code) {
+        selectedIdx = Math.min(selectedIdx, filtered.length - 1);
+        return;
+      }
+      const idx = filtered.indexOf(code);
+      if (idx >= 0) {
+        selectedIdx = idx;
+      } else {
+        selectedIdx = Math.min(selectedIdx, filtered.length - 1);
+      }
     }
 
     function goToNextUncompleted(completedCode) {
@@ -520,10 +701,12 @@
       if (!filteredCodes.length) {
         html = '<li class="empty-list">No codes available</li>';
       }
+      const padWidth = getIndexPadWidth();
       filteredCodes.forEach((code, i) => {
         const st = status[code]||{};
+        const idxLabel = String(codeIndex[code] || 0).padStart(padWidth, '0');
         html += `<li class="code-item${i===selectedIdx?' selected':''}${st.completed?' completed':''}" data-listidx="${i}" title="${st.completed ? 'Completed on: ' + st.timestamp : ''}">
-          <span>${maskCode(code)}</span>
+          <span>${idxLabel}) ${displayCodeValue(code)}</span>
           ${st.completed && st.timestamp ? `<span class="timestamp">(${st.timestamp})</span>` : ''}
         </li>`;
       });
@@ -535,38 +718,85 @@
           renderAll();
         }
       });
+      const selectedEl = codeListUl().querySelector('.code-item.selected');
+      if (selectedEl) {
+        selectedEl.scrollIntoView({ block: 'nearest' });
+      }
       summaryDiv().innerHTML = 
         `<span>Available codes: <b>${codes.filter(c=>!status[c]?.completed).length}</b> / <b>${codes.length}</b></span>`;
+      summaryDiv().style.display = showSummary ? 'block' : 'none';
     }
 
     function showQRAndCurrent() {
       const filteredCodes = getFilteredCodes();
       let code = filteredCodes[selectedIdx] || '';
-      qrDiv().innerHTML = '';
       if (code) {
-        new QRCode(qrDiv(), {
-          text: `https://store.pokemongo.com/offer-redemption?passcode=${encodeURIComponent(code)}`,
-          width: Math.min(window.innerWidth * 0.9, 270),
-          height: Math.min(window.innerWidth * 0.9, 270),
-          colorDark: "#0c2133",
-          colorLight: "#fafbfc",
-          margin: 2,
-        });
+        const qrText = `https://store.pokemongo.com/offer-redemption?passcode=${encodeURIComponent(code)}`;
+        const qrSize = Math.min(window.innerWidth * 0.9, 270);
+        if (!qrCodeInstance) {
+          qrCodeInstance = new QRCode(qrDiv(), {
+            text: qrText,
+            width: qrSize,
+            height: qrSize,
+            colorDark: "#0c2133",
+            colorLight: "#fafbfc",
+            margin: 2,
+          });
+          lastQrText = qrText;
+        } else if (lastQrText !== qrText) {
+          qrCodeInstance.makeCode(qrText);
+          lastQrText = qrText;
+        }
+        qrDiv().style.visibility = 'visible';
         currentCodeLabel().innerText = code;
       } else {
+        qrDiv().style.visibility = 'hidden';
         currentCodeLabel().innerText = "";
       }
     }
 
-    function updateShowCompletedBtn() {
-      showCompletedBtn().textContent = showCompleted ? 'Hide Completed' : 'Show Completed';
+    function setSwitchState(wrap, enabled) {
+      wrap.classList.toggle('on', enabled);
+      wrap.classList.toggle('off', !enabled);
     }
 
-    function toggleShowCompleted() {
-      showCompleted = !showCompleted;
+    function updateOptionToggles() {
+      setSwitchState(showCompletedWrap(), showCompleted);
+      setSwitchState(showValuesWrap(), showCodeValues);
+      setSwitchState(showSummaryWrap(), showSummary);
+    }
+
+    function setShowCompleted(value) {
+      const selectedCode = getSelectedCode();
+      showCompleted = value;
       setCookie(SHOW_COMPLETED_COOKIE, showCompleted ? '1' : '0', 90);
-      selectedIdx = 0;
+      if (!showCompleted && selectedCode && status[selectedCode]?.completed) {
+        const filtered = getFilteredCodes();
+        selectedIdx = filtered.length ? 0 : 0;
+      } else {
+        restoreSelectionByCode(selectedCode);
+      }
       renderAll();
+    }
+
+    function setShowCodeValues(value) {
+      showCodeValues = value;
+      setCookie(SHOW_VALUES_COOKIE, showCodeValues ? '1' : '0', 90);
+      renderAll();
+    }
+    function toggleShowCompleted() {
+      setShowCompleted(!showCompleted);
+    }
+    function toggleShowCodeValues() {
+      setShowCodeValues(!showCodeValues);
+    }
+    function setShowSummary(value) {
+      showSummary = value;
+      setCookie(SHOW_SUMMARY_COOKIE, showSummary ? '1' : '0', 90);
+      renderAll();
+    }
+    function toggleShowSummary() {
+      setShowSummary(!showSummary);
     }
 
     function buildExportText() {
@@ -598,7 +828,7 @@
       renderCodeList();
       showQRAndCurrent();
       updateNavBtnStates();
-      updateShowCompletedBtn();
+      updateOptionToggles();
     }
 
     function updateNavBtnStates() {
@@ -650,6 +880,8 @@
     function clearAllCodes() {
       codes = [];
       status = {};
+      codeIndex = {};
+      nextCodeIndex = 1;
       selectedIdx = 0;
       saveToStorage();
       closeClearModal();
@@ -664,7 +896,9 @@
       exportBtn().onclick = openExportModal;
       exportCloseBtn().onclick = closeExportModal;
       exportModal().onclick = (e) => { if (e.target === exportModal()) closeExportModal(); };
-      showCompletedBtn().onclick = toggleShowCompleted;
+      showCompletedWrap().onclick = toggleShowCompleted;
+      showValuesWrap().onclick = toggleShowCodeValues;
+      showSummaryWrap().onclick = toggleShowSummary;
       clearBtn().onclick = openClearModal;
       clearYesBtn().onclick = clearAllCodes;
       clearNoBtn().onclick = closeClearModal;
