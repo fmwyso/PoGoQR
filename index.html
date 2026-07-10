@@ -105,10 +105,10 @@
       transition: background 0.14s;
     }
     .controls .icon-btn {
-      width: 48px;
-      height: 48px;
+      width: 72px;
+      height: 72px;
       padding: 0;
-      font-size: 1.45em;
+      font-size: 2.2em;
       line-height: 1;
       display: inline-flex;
       align-items: center;
@@ -116,7 +116,7 @@
     }
     .controls .complete-btn {
       background: #e53935;
-      font-size: 1.25em;
+      font-size: 1.9em;
       font-weight: bold;
     }
     .controls .complete-btn:disabled {
@@ -128,7 +128,7 @@
     }
     .controls .undo-btn {
       background: #43a047;
-      font-size: 1.35em;
+      font-size: 2em;
       font-weight: bold;
     }
     .controls .undo-btn:disabled {
@@ -447,22 +447,132 @@
   <!-- QRCode.js (MIT, https://github.com/davidshimjs/qrcodejs) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
-    // Helpers for Cookie Storage
-    const CODE_LIST_COOKIE = "pg_codes_v1";
-    const CODE_STATUS_COOKIE = "pg_codes_status_v1";
-    const SHOW_COMPLETED_COOKIE = "pg_show_completed_v1";
-    const SHOW_VALUES_COOKIE = "pg_show_values_v1";
-    const SHOW_SUMMARY_COOKIE = "pg_show_summary_v1";
-    const CODE_INDEX_COOKIE = "pg_code_index_v1";
-    const NEXT_INDEX_COOKIE = "pg_next_index_v1";
-    function setCookie(name, value, days) {
-      const d = new Date();
-      d.setTime(d.getTime() + (days*24*60*60*1000));
-      document.cookie = name + "=" + encodeURIComponent(value) + ";expires=" + d.toUTCString() + ";path=/";
-    }
+    // Persistence (localStorage master object)
+    const APP_DATA_KEY = 'pogo_app_data';
+    const LEGACY_COOKIES = {
+      codes: 'pg_codes_v1',
+      status: 'pg_codes_status_v1',
+      showCompleted: 'pg_show_completed_v1',
+      showValues: 'pg_show_values_v1',
+      showSummary: 'pg_show_summary_v1',
+      codeIndex: 'pg_code_index_v1',
+      nextIndex: 'pg_next_index_v1',
+    };
+
     function getCookie(name) {
       const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
       return v ? decodeURIComponent(v.pop()) : null;
+    }
+
+    function clearLegacyCookies() {
+      Object.values(LEGACY_COOKIES).forEach(name => {
+        document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+      });
+    }
+
+    function defaultMasterData() {
+      return {
+        v: 1,
+        codes: [],
+        status: [],
+        codeIndex: [],
+        nextCodeIndex: 1,
+        settings: {
+          showCompleted: false,
+          showCodeValues: true,
+          showSummary: true,
+        },
+      };
+    }
+
+    function statusMapToArray(map) {
+      return codes.map(code => {
+        const s = map[code] || { completed: false, timestamp: null };
+        return [code, !!s.completed, s.timestamp];
+      });
+    }
+
+    function statusArrayToMap(arr) {
+      const map = {};
+      (arr || []).forEach(entry => {
+        if (!entry || !entry[0]) return;
+        map[entry[0]] = { completed: !!entry[1], timestamp: entry[2] || null };
+      });
+      return map;
+    }
+
+    function codeIndexMapToArray(map) {
+      return codes.map(code => [code, map[code]]);
+    }
+
+    function codeIndexArrayToMap(arr) {
+      const map = {};
+      (arr || []).forEach(entry => {
+        if (!entry || !entry[0]) return;
+        map[entry[0]] = entry[1];
+      });
+      return map;
+    }
+
+    function applyMasterData(data) {
+      const master = data || defaultMasterData();
+      codes = Array.isArray(master.codes) ? master.codes : [];
+      status = statusArrayToMap(master.status);
+      codeIndex = codeIndexArrayToMap(master.codeIndex);
+      nextCodeIndex = Math.max(1, Number(master.nextCodeIndex) || 1);
+      const settings = master.settings || {};
+      if (settings.showCompleted !== undefined) showCompleted = !!settings.showCompleted;
+      if (settings.showCodeValues !== undefined) showCodeValues = !!settings.showCodeValues;
+      if (settings.showSummary !== undefined) showSummary = !!settings.showSummary;
+    }
+
+    function buildMasterData() {
+      return {
+        v: 1,
+        codes,
+        status: statusMapToArray(status),
+        codeIndex: codeIndexMapToArray(codeIndex),
+        nextCodeIndex,
+        settings: {
+          showCompleted,
+          showCodeValues,
+          showSummary,
+        },
+      };
+    }
+
+    function migrateFromCookies() {
+      const storedCodes = getCookie(LEGACY_COOKIES.codes);
+      const hasLegacy = storedCodes !== null
+        || getCookie(LEGACY_COOKIES.status) !== null
+        || getCookie(LEGACY_COOKIES.codeIndex) !== null;
+      if (!hasLegacy) return null;
+
+      const migratedCodes = storedCodes ? JSON.parse(storedCodes) : [];
+      const legacyStatusObj = getCookie(LEGACY_COOKIES.status);
+      const legacyCodeIndexObj = getCookie(LEGACY_COOKIES.codeIndex);
+      const legacyStatus = legacyStatusObj ? JSON.parse(legacyStatusObj) : {};
+      const legacyCodeIndex = legacyCodeIndexObj ? JSON.parse(legacyCodeIndexObj) : {};
+      const legacyNextIndex = getCookie(LEGACY_COOKIES.nextIndex);
+
+      const statusArr = migratedCodes.map(code => {
+        const s = legacyStatus[code] || { completed: false, timestamp: null };
+        return [code, !!s.completed, s.timestamp];
+      });
+      const codeIndexArr = migratedCodes.map(code => [code, legacyCodeIndex[code]]);
+
+      return {
+        v: 1,
+        codes: migratedCodes,
+        status: statusArr,
+        codeIndex: codeIndexArr,
+        nextCodeIndex: Math.max(1, Number(legacyNextIndex) || 1),
+        settings: {
+          showCompleted: getCookie(LEGACY_COOKIES.showCompleted) === '1',
+          showCodeValues: getCookie(LEGACY_COOKIES.showValues) !== '0',
+          showSummary: getCookie(LEGACY_COOKIES.showSummary) !== '0',
+        },
+      };
     }
 
     function parseCodeLine(line) {
@@ -624,38 +734,33 @@
     let qrCodeInstance = null;
     let lastQrText = '';
 
-    // Load From Cookies
+    // Load from localStorage (with one-time cookie migration)
     function loadFromStorage() {
-      const storedCodes = getCookie(CODE_LIST_COOKIE);
-      const storedStatus = getCookie(CODE_STATUS_COOKIE);
-      const storedShowCompleted = getCookie(SHOW_COMPLETED_COOKIE);
-      const storedShowValues = getCookie(SHOW_VALUES_COOKIE);
-      const storedShowSummary = getCookie(SHOW_SUMMARY_COOKIE);
-      const storedCodeIndex = getCookie(CODE_INDEX_COOKIE);
-      const storedNextCodeIndex = getCookie(NEXT_INDEX_COOKIE);
-      codes = storedCodes ? JSON.parse(storedCodes) : [];
-      status = storedStatus ? JSON.parse(storedStatus) : {};
-      if (storedShowCompleted !== null) {
-        showCompleted = storedShowCompleted === '1';
-      }
-      if (storedShowValues !== null) {
-        showCodeValues = storedShowValues === '1';
-      }
-      if (storedShowSummary !== null) {
-        showSummary = storedShowSummary === '1';
-      }
-      codeIndex = storedCodeIndex ? JSON.parse(storedCodeIndex) : {};
-      if (storedNextCodeIndex !== null) {
-        nextCodeIndex = Math.max(1, Number(storedNextCodeIndex) || 1);
+      try {
+        const raw = localStorage.getItem(APP_DATA_KEY);
+        if (raw) {
+          applyMasterData(JSON.parse(raw));
+        } else {
+          const migrated = migrateFromCookies();
+          if (migrated) {
+            applyMasterData(migrated);
+            saveToStorage();
+            clearLegacyCookies();
+          }
+        }
+      } catch {
+        applyMasterData(defaultMasterData());
       }
       fixCodeStatus();
       fixCodeIndex();
     }
+
     function saveToStorage() {
-      setCookie(CODE_LIST_COOKIE, JSON.stringify(codes), 90);
-      setCookie(CODE_STATUS_COOKIE, JSON.stringify(status), 90);
-      setCookie(CODE_INDEX_COOKIE, JSON.stringify(codeIndex), 90);
-      setCookie(NEXT_INDEX_COOKIE, String(nextCodeIndex), 90);
+      try {
+        localStorage.setItem(APP_DATA_KEY, JSON.stringify(buildMasterData()));
+      } catch (e) {
+        alert('Could not save data. Storage may be full.');
+      }
     }
     function fixCodeStatus() {
       // Remove unknown codes, add empty ones
@@ -857,19 +962,19 @@
     function setShowCompleted(value) {
       const selectedCode = getSelectedCode();
       showCompleted = value;
-      setCookie(SHOW_COMPLETED_COOKIE, showCompleted ? '1' : '0', 90);
       if (!showCompleted && selectedCode && status[selectedCode]?.completed) {
         const filtered = getFilteredCodes();
         selectedIdx = filtered.length ? 0 : 0;
       } else {
         restoreSelectionByCode(selectedCode);
       }
+      saveToStorage();
       renderAll();
     }
 
     function setShowCodeValues(value) {
       showCodeValues = value;
-      setCookie(SHOW_VALUES_COOKIE, showCodeValues ? '1' : '0', 90);
+      saveToStorage();
       renderAll();
     }
     function toggleShowCompleted() {
@@ -880,7 +985,7 @@
     }
     function setShowSummary(value) {
       showSummary = value;
-      setCookie(SHOW_SUMMARY_COOKIE, showSummary ? '1' : '0', 90);
+      saveToStorage();
       renderAll();
     }
     function toggleShowSummary() {
@@ -1012,7 +1117,7 @@
       });
     }
 
-    // On Load, pull cookie data
+    // On load, restore persisted data
     window.addEventListener('DOMContentLoaded', function() {
       loadFromStorage();
       renderAll();
